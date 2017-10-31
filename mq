@@ -109,33 +109,18 @@ function main_usage {
     echo
 }
 
-function ini_parser {
-    ret="";
-    section=$(cat ${1} | awk "/\[${2}\]/{f=1;next} /\[/{f=0} f" );
-    ret=${section}
-    if [[ ${3} ]]; then
-        ret=$(echo "${section}" | awk -F "=" '/'${3}'/ {gsub(/^[ \s]+|[ \s]+$/, "", $2); print $2}');
-    fi
-    echo "${ret}";
-}
-
 ######################
 ##
 #       CONFIG:
 #
-PATCH_NAMING="%s"
-PATCH_NAMING_CONFIG=$(ini_parser "${HOME}/.hgrc" "mq" "patch_naming");
-if [[ ${PATCH_NAMING_CONFIG} ]]; then
-    PATCH_NAMING=${PATCH_NAMING_CONFIG};
-fi
-# PATCH_DIR     - directory where patches are stored when popped, exported and imported into the project.
-PATCH_DIR=${HOME}"/.mq/patches"
-PATCH_DIR_CONFIG=$(ini_parser "${HOME}/.hgrc" "mq" "patch_dir");
-if [[ ${PATCH_DIR_CONFIG} ]]; then
-    PATCH_DIR=${PATCH_DIR_CONFIG};
-fi
-HG_USERNAME=$(ini_parser "${HOME}/.hgrc" "ui" "username");
-HG_EDITOR=$(ini_parser "${HOME}/.hgrc" "ui" "editor");
+MQ_HOME="${HOME}/.mq"
+HG_USERNAME=$(hg config ui.username);
+HG_EDITOR=$(hg config ui.editor);
+HG_EDITOR=${HG_EDITOR:-'nano $FILE'}
+PATCH_NAMING=$(hg config mq.patch_naming);
+PATCH_NAMING=${PATCH_NAMING:-%s}
+PATCH_DIR=$(hg config mq.patch_dir);
+PATCH_DIR=${PATCH_DIR:-${MQ_HOME}/patches}
 #
 ##
 ######################
