@@ -248,7 +248,7 @@ HG: --
         message=$(grep -v '^HG:' /tmp/commit_message.log)
         if [[ ${message} ]]; then
             echo "${message}" > /tmp/commit_message.log; # Clean message log
-            ARGS="-U -l /tmp/commit_message.log";
+            ARGS="-UD -l /tmp/commit_message.log";
             hg qrefresh ${ARGS}
         else
             echo "abort: empty commit message"
