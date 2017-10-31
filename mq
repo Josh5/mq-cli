@@ -238,7 +238,7 @@ mq_commit() { #-- Commit the specified files or all outstanding changes.
             echo $line >> /tmp/commit_message.log
         done < "${patch_file}"
         hg_branch=$(hg id -b);
-        hg_status=$(hg status -m -a -r -d -c --no-status);
+        hg_status=$(hg status --no-status);
         hq_qseries=$(hg qseries);
         body="
 HG: Enter commit message.  Lines beginning with 'HG:' are removed.
