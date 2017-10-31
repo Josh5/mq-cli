@@ -338,7 +338,7 @@ mq_import() { #-- Import a patch into this project.
     echo
     read -p "Provide a name for this patch: " name
     project=$(working_project);
-    selected_patch=${PATCH_NAMING/\%s/${name}}_${project}
+    selected_patch=$(printf "${PATCH_NAMING}" "${name}")_${project};
     # TODO: check if patch already exists
     echo $selected_patch;
     patch_path=${PATCH_DIR}/${selected_patch};
@@ -378,7 +378,7 @@ mq_new() { #-- Generate new patch for current working branch.
         exit 1
     fi
     project=$(working_project)
-    name=${PATCH_NAMING/\%s/${2}}_${project}
+    name=$(printf "${PATCH_NAMING}" "${2}")_${project};
     hg qnew ${name} ${@:3} --git --currentuser;
 }
 
