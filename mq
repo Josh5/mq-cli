@@ -207,58 +207,7 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
 }
 
 mq_commit() { #-- Commit the specified files or all outstanding changes.
-    if [[ $(hg diff) ]]; then
-        touch /tmp/commit_message.log
-        applied_patch=$(hg qapplied)
-        patch_file="./.hg/patches/${applied_patch}"
-        parent_changeset=$(cat ${patch_file} | grep -o -P '(?<=# Parent  )(.*?)$');
-        while read -r line
-        do
-            if [[ "$line" == "#"* ]]; then
-                continue
-            fi
-            if [[ "$line" == "diff --git"* ]]; then
-                break;
-            fi
-            echo $line >> /tmp/commit_message.log
-        done < "${patch_file}"
-        hg_branch=$(hg id -b);
-        hg_status=$(hg status --no-status);
-        hq_qseries=$(hg qseries);
-        body="
-HG: Enter commit message.  Lines beginning with 'HG:' are removed.
-HG: Leave message empty to abort commit.
-HG: --
-HG: User:   ${HG_USERNAME}
-HG: Branch:  ${hg_branch}
-HG: Patch:   ${hq_qseries}
-HG: Parent:  ${parent_changeset}
-HG: --
-";
-        for change in ${hg_status}
-        do
-            body=${body}"HG: changed  ${change}
-";
-        done
-        echo "${body}" >> /tmp/commit_message.log
-        if [[ "$@" != *"--no-message"* ]]; then # prevents a commit message being added/amended
-            FILE="/tmp/commit_message.log";
-            eval ${HG_EDITOR};
-        fi
-        message=$(grep -v '^HG:' /tmp/commit_message.log)
-        if [[ ${message} ]]; then
-            echo "${message}" > /tmp/commit_message.log; # Clean message log
-            ARGS="-UD -l /tmp/commit_message.log";
-            hg qrefresh ${ARGS}
-        else
-            echo "abort: empty commit message"
-        fi
-        if [[ -f /tmp/commit_message.log ]]; then
-            rm -f /tmp/commit_message.log
-        fi
-    else
-        echo "nothing changed"
-    fi
+    hg qrefresh -eUD ${@:2};
 }
 
 mq_diff() { #-- Diff repository (or selected files).
