@@ -109,6 +109,14 @@ function main_usage {
     echo
 }
 
+function check_hg_repo {
+    project=$(working_project);
+    if [[ ! ${project} ]]; then
+        echo "abort: no repository found in '${PWD}' (.hg not found)!"
+        exit 1
+    fi
+}
+
 ######################
 ##
 #       CONFIG:
@@ -127,6 +135,7 @@ EXPORT_DIR=$(eval echo $(hg config mq.export_dir));
 ######################
 
 mq_apply() { #-- Apply a patch to your working branch.
+    check_hg_repo
     conf_array='';
     # First check if current try has uncommitted changes (cannot apply without committing changes first)
     if [[ $(hg diff) ]]; then
@@ -192,6 +201,7 @@ mq_apply() { #-- Apply a patch to your working branch.
 }
 
 mq_clear() { #-- Wipe the current patch from your working branch. Warning! All non-exported changes will be lost.
+    check_hg_repo
     echo "WARNING!! This command will completely clear you patch queue. There is no coming back from this."
     echo 
     read  -p "If you wish to continue, type the word 'YES' in caps:  " AN
@@ -205,14 +215,17 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
 }
 
 mq_commit() { #-- Commit the specified files or all outstanding changes.
+    check_hg_repo
     hg qrefresh -eUD ${@:2};
 }
 
 mq_diff() { #-- Diff repository (or selected files).
+    check_hg_repo
     hg qdiff ${@:2} -p -U 8;
 }
 
 mq_export() { #-- Generate a local output of a patch to a specified directory.
+    check_hg_repo
     if [[ ${2} ]]; then
         export_dir=${2%/};
     elif [[ ${EXPORT_DIR} ]]; then
@@ -245,10 +258,6 @@ mq_export() { #-- Generate a local output of a patch to a specified directory.
         fi
     fi
     if [[ ! ${selected_patch} ]]; then
-        project=$(working_project);
-        if [[ ! ${project} ]]; then
-            exit 1
-        fi
         # List all patches
         echo
         i=1
@@ -351,6 +360,7 @@ mq_import() { #-- Import a patch into this project.
 }
 
 mq_new() { #-- Generate new patch for current working branch.
+    check_hg_repo
     if [[ -s ./.hg/patches/series ]]; then 
         echo "abort: and active patch already exists"; 
         exit 1
@@ -365,6 +375,7 @@ mq_new() { #-- Generate new patch for current working branch.
 }
 
 mq_patches() { #-- Show a list of patches in the patch cache pool.
+    check_hg_repo
     project=$(working_project)
     # List all patches
     echo -n "
@@ -393,6 +404,7 @@ mq_patches() { #-- Show a list of patches in the patch cache pool.
 }
 
 mq_pop() { #-- Pops the current patch off the working branch and into out patch cache pool.
+    check_hg_repo
     # pop off current patch to mq PATCH_DIR
     # First check if there are uncommitted changes and warn user
     if [[ $(hg diff) ]]; then
@@ -425,6 +437,7 @@ mq_pop() { #-- Pops the current patch off the working branch and into out patch 
 }
 
 mq_status() { #-- Show any patches currently applied to your working branch and show changed files in the working directory.
+    check_hg_repo
     hg_branch=$(hg id -b);
     hq_qseries=$(hg qseries);
     hg_status=$(hg status);
