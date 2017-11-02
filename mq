@@ -117,16 +117,14 @@ MQ_HOME="${HOME}/.mq"
 HG_USERNAME=$(hg config ui.username);
 HG_EDITOR=$(hg config ui.editor);
 HG_EDITOR=${HG_EDITOR:-'nano $FILE'}
-PATCH_NAMING=$(hg config mq.patch_naming);
+PATCH_NAMING=$(eval echo $(hg config mq.patch_naming));
 PATCH_NAMING=${PATCH_NAMING:-%s}
-PATCH_DIR=$(hg config mq.patch_dir);
+PATCH_DIR=$(eval echo $(hg config mq.patch_dir));
 PATCH_DIR=${PATCH_DIR:-${MQ_HOME}/patches}
+EXPORT_DIR=$(eval echo $(hg config mq.export_dir));
 #
 ##
 ######################
-
-# echo $HG_EDITOR;
-# exit
 
 mq_apply() { #-- Apply a patch to your working branch.
     conf_array='';
@@ -217,7 +215,40 @@ mq_diff() { #-- Diff repository (or selected files).
 mq_export() { #-- Generate a local output of a patch to a specified directory.
     if [[ ${2} ]]; then
         export_dir=${2%/};
+    elif [[ ${EXPORT_DIR} ]]; then
+        export_dir=${EXPORT_DIR%/};
+    else # User needs to provide an output folder
+        echo "mq export ([LOCATION])"
+        echo 
+        echo "    No location specified or configured."
+        echo "    You can configure a default location in .hgrc with 'export_dir'"
+        echo 
+        exit 1
+    fi
+    # Check if there is already a patch applied
+    if [[ $(hg qseries) ]]; then
+        applied_patch=$(hg qseries);
+        selected_patch=${applied_patch[0]};
+        patch_path=./.hg/patches/${selected_patch};
+        echo "selecting applied patch ${selected_patch} from your current project...";
+        echo
+        # First check if there are uncommitted changes and warn user
+        if [[ $(hg diff) ]]; then
+            echo "There are uncommitted changes in your working branch:"
+            hg status
+            echo
+            read -p "Would you like to commit these first? (y/n) " AN
+            if [[ "${AN}" != "N" && "${AN}" != "n" ]]; then
+                echo "abort: commit changes before retrying export."
+                exit 0;
+            fi
+        fi
+    fi
+    if [[ ! ${selected_patch} ]]; then
         project=$(working_project);
+        if [[ ! ${project} ]]; then
+            exit 1
+        fi
         # List all patches
         echo
         i=1
@@ -242,25 +273,27 @@ mq_export() { #-- Generate a local output of a patch to a specified directory.
             numbers='^[0-9]+$'
             if [[ "${menu}" -le "${#conf_array[@]}" && ${menu} =~ ${numbers} && "${menu}" != "0" ]]; then
                 (( menu-- ))
-                selected_patch=${conf_array[${menu}]}
+                selected_patch=${conf_array[${menu}]};
+                patch_path=${PATCH_DIR}/${selected_patch};
                 echo; echo "Exporting patch ${selected_patch}...";
             else
                 echo; echo "That was not a valid selection."; echo "No patch selected.";
                 exit 1
             fi
         else
-            echo "No patches were found for your current project ${project}. Check that you have popped your patch before trying to export";
+            echo "No patches were found for your current project ${project}.";
         fi
-    else # User needs to provide an output folder
-        echo "mq export [LOCATION]"
-        echo 
-        echo "    No location specified."
-        echo 
-        exit 1
     fi
-    patch_path=${PATCH_DIR}/${selected_patch};
-    # TODO: check if patch already exists
-    cp $patch_path ${export_dir}/${selected_patch}.patch
+    if [[ ${selected_patch} ]]; then
+        # TODO: check if patch already exists
+        cp $patch_path ${export_dir}/${selected_patch}.patch;
+        status=$?;
+        if [[ $status == 0 ]]; then
+            echo "Patch successfully exported to ${export_dir}/${selected_patch}.patch";
+        else
+            echo "Failed to export patch. Nothing done."
+        fi
+    fi
 }
 
 mq_import() { #-- Import a patch into this project.
@@ -363,8 +396,12 @@ mq_pop() { #-- Pops the current patch off the working branch and into out patch 
     # pop off current patch to mq PATCH_DIR
     # First check if there are uncommitted changes and warn user
     if [[ $(hg diff) ]]; then
-        read -p "There are uncommitted changes in your working branch. Would you like to commit these first? (y/n) " AN
+        echo "There are uncommitted changes in your working branch:"
+        hg status
+        echo
+        read -p "Would you like to commit these first? (y/n) " AN
         if [[ "${AN}" != "N" && "${AN}" != "n" ]]; then
+            echo "abort: commit changes before retrying pop."
             exit 0;
         fi
     fi
