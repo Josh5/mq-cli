@@ -369,6 +369,13 @@ mq_new() { #-- Generate new patch for current working branch.
         echo "abort: and active patch already exists"; 
         exit 1
     fi
+    if [[ ! ${2} ]]; then
+        echo "abort: no name specified";
+        echo
+        echo "Usage: mq new [NAME]";
+        echo
+        exit 1
+    fi
     project=$(working_project)
     name=$(printf "${PATCH_NAMING}" "${2}")_${project};
     hg qnew ${name} ${@:3} --git --currentuser;
