@@ -31,7 +31,7 @@
 ##
 ######################
 
-VERSION=1.0.2
+VERSION=1.0.3
 
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
@@ -117,6 +117,24 @@ function check_hg_repo {
     fi
 }
 
+function check_uncommitted_changes {
+    # Check if there are uncommitted changes and warn user
+    if [[ $(hg diff) ]]; then
+        if [[ "${1}" == "required" ]]; then
+            echo "There are uncommitted changes in your working branch. You need to commit these before running this command."
+            exit 1;
+        fi
+        echo "There are uncommitted changes in your working branch:"
+        hg status
+        echo
+        read -p "Would you like to commit these first? (y/n) " AN
+        if [[ "${AN}" != "N" && "${AN}" != "n" ]]; then
+            echo "abort: commit changes before retrying your command."
+            exit 0;
+        fi
+    fi
+}
+
 ######################
 ##
 #       CONFIG:
@@ -138,12 +156,7 @@ mq_apply() { #-- Apply a patch to your working branch.
     check_hg_repo
     conf_array='';
     # First check if current try has uncommitted changes (cannot apply without committing changes first)
-    if [[ $(hg diff) ]]; then
-        echo "There are uncommitted changes in your working branch. You need to commit these before applying a patch."
-        # echo
-        # hg diff
-        exit 1
-    fi
+    check_uncommitted_changes required
     # Check if there is already a patch applied
     if [[ $(hg qseries) ]]; then
         applied_patch=$(hg qseries);
@@ -246,16 +259,7 @@ mq_export() { #-- Generate a local output of a patch to a specified directory.
         echo "selecting applied patch ${selected_patch} from your current project...";
         echo
         # First check if there are uncommitted changes and warn user
-        if [[ $(hg diff) ]]; then
-            echo "There are uncommitted changes in your working branch:"
-            hg status
-            echo
-            read -p "Would you like to commit these first? (y/n) " AN
-            if [[ "${AN}" != "N" && "${AN}" != "n" ]]; then
-                echo "abort: commit changes before retrying export."
-                exit 0;
-            fi
-        fi
+        check_uncommitted_changes
     fi
     if [[ ! ${selected_patch} ]]; then
         # List all patches
@@ -302,6 +306,80 @@ mq_export() { #-- Generate a local output of a patch to a specified directory.
         else
             echo "Failed to export patch. Nothing done."
         fi
+    fi
+}
+
+mq_finish() { #-- Move applied patches into repository history.
+    check_hg_repo
+    # First check if there are uncommitted changes and warn user
+    check_uncommitted_changes
+    if [[ $(hg qseries) ]]; then
+        hg_branch=$(hg id -b);
+        applied_patch=$(hg qseries);
+        applied_patch=${applied_patch[0]};
+        applied_patch_path="./.hg/patches/${applied_patch}";
+        echo -n "Finishing patch
+        Current branch:     ${hg_branch}
+        Applied patch:      ${applied_patch}
+        ";
+        echo
+        pull=0;
+        rebase=0;
+        for arg in $@; do
+            if [[ "${arg}" == "--pull" ]]; then
+                pull=1;
+            fi
+            if [[ "${arg}" == "--rebase" ]]; then
+                rebase=1;
+            fi
+        done
+        if [[ ${pull} == 0 ]]; then
+            echo
+            echo "- STEP HELP:"
+            echo "    Sometimes it is best if you refresh your patch with the latest changes before finishing it."
+            echo "    This is done by carrying out an hg pull and update first."
+            echo
+            echo "    NOTE:"
+            echo "    If you choose to pull and update, you will be given the option to review your patch again after this step."
+            echo
+            read -p "Would you like to carried out an 'hg pull' and 'hg update' before finishing this patch? (y/n) " AN
+            if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                pull=1;
+                if [[ ${rebase} == 0 ]]; then
+                    echo
+                    echo "- STEP HELP:"
+                    echo "    When we are working with patches we need to be careful of hg pull."
+                    echo "    We can either pop the current patch and pull. This is the simplest option if you know there are no conflicts."
+                    echo "    The other option is to rebase when we pull and then attempt to merge any conflicts using your configured mergetool."
+                    echo "    Not choosing rebase will generate '.rej' files in your working tree for you to manually resolve."
+                    echo
+                    read -p "Would you like mq to rebase when we pull in order to solve merge conflicts? (y/n) " AN
+                    if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                        rebase=1;
+                    fi
+                fi
+            fi
+        fi
+        if [[ ${pull} == 1 ]]; then
+            if [[ ${rebase} == 1 ]]; then
+                hg pull --rebase;
+                hg update
+            else
+                hg qpop -a -f 2> /dev/null;
+                hg pull
+                hg update
+                hg qpush ${applied_patch} 2> /dev/null;
+            fi
+            hg qrefresh
+            echo
+            read -p "Would you like to review your patch again now that you have carried out a pull and update? (y/n) " AN
+            if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                exit 0;
+            fi
+        fi
+        hg qfinish ${applied_patch}
+    else
+        echo "no patches applied"
     fi
 }
 
@@ -414,16 +492,7 @@ mq_pop() { #-- Pops the current patch off the working branch and into out patch 
     check_hg_repo
     # pop off current patch to mq PATCH_DIR
     # First check if there are uncommitted changes and warn user
-    if [[ $(hg diff) ]]; then
-        echo "There are uncommitted changes in your working branch:"
-        hg status
-        echo
-        read -p "Would you like to commit these first? (y/n) " AN
-        if [[ "${AN}" != "N" && "${AN}" != "n" ]]; then
-            echo "abort: commit changes before retrying pop."
-            exit 0;
-        fi
-    fi
+    check_uncommitted_changes
     if [[ $(hg qseries) ]]; then
         applied_patch=$(hg qseries);
         applied_patch=${applied_patch[0]};
