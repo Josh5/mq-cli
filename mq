@@ -31,7 +31,7 @@
 ##
 ######################
 
-VERSION=1.0.3
+VERSION=1.0.4
 
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
@@ -131,6 +131,96 @@ function check_uncommitted_changes {
         if [[ "${AN}" != "N" && "${AN}" != "n" ]]; then
             echo "abort: commit changes before retrying your command."
             exit 0;
+        fi
+    fi
+}
+
+function rebase_patch {
+    if [[ $(hg qseries) ]]; then
+        applied_patch=$(hg qseries);
+        applied_patch=${applied_patch[0]};
+        applied_patch_path="./.hg/patches/${applied_patch}";
+        pull=0;
+        rebase=0;
+        prompt=1;
+        action=rebasing
+        for arg in $@; do
+            if [[ "${arg}" == "--pull" ]]; then
+                pull=1;
+            fi
+            if [[ "${arg}" == "--rebase" ]]; then
+                rebase=1;
+                prompt=0;
+            fi
+            if [[ "${arg}" == "--finish" ]]; then
+                action=finishing
+            fi
+        done
+        if [[ ${pull} == 0 ]]; then
+            echo
+            echo "- STEP HELP:"
+            echo "    Sometimes it is best if you refresh your patch with the latest changes before you continue ${action}."
+            echo "    This is done by carrying out an hg pull and update first."
+            echo
+            echo "    NOTE:"
+            echo "    Your patch will be unaffected during this step as it will be temporarily removed to avoid merge conflicts."
+            echo
+            read -p "Would you like to carried out an 'hg pull' and 'hg update' before ${action} this patch? (y/n) " AN
+            if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                pull=1;
+            fi
+        fi
+        if [[ ${pull} == 1 ]]; then
+            if [[ $(hg qapplied) ]]; then
+                hg qpop -a -f 2> /dev/null;
+            fi
+            hg pull;
+            hg update;
+        fi
+        if [[ ${rebase} == 0 ]]; then
+            echo
+            echo "- STEP HELP:"
+            echo "    When we are working with patches we need to be careful of hg pull."
+            echo "    We can either pop the current patch and pull. This is the simplest option if you know there are no conflicts."
+            echo "    The other option is to rebase when we pull and then attempt to merge any conflicts using your configured mergetool."
+            echo "    Not choosing rebase will generate '.rej' files in your working tree for you to manually resolve."
+            echo
+            echo "    NOTE:"
+            echo "    If you choose to rebase, you will be given the option to review your patch again after this step."
+            echo
+            read -p "Would you like mq to rebase when we pull in order to solve merge conflicts? (y/n) " AN
+            if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                rebase=1;
+            fi
+        fi
+        if [[ ${rebase} == 1 ]]; then
+            # Patch may not be applied at this point. Lets make sure it is removed for consistency 
+            if [[ $(hg qapplied) ]]; then
+                hg qpop -a -f 2> /dev/null;
+            fi
+            qparent=$(grep '# Parent ' ${applied_patch_path} | awk '{print $3}');
+            tip=$(hg id -r tip -i);
+            hg update -r ${qparent}
+            hg qpush ${applied_patch} 2> /dev/null;
+            qtip=$(hg id -r qtip -i);
+            hg rebase -s ${qtip} -d ${tip};
+            hg qrefresh;
+        fi
+        if [[ $(hg qseries) ]]; then
+            if [[ ${prompt} == 1 ]]; then # Only show this prompt if it was called using the other prompts
+                echo
+                read -p "Would you like to review your patch again now that you have carried out a pull and update? (y/n) " AN
+                if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                    exit 0;
+                fi
+            fi
+        else
+            echo
+            echo "Your patch has been removed as there are no longer any changes for it to track after the rebase."
+            read -p "Would you like to recreate a blank patch with the same name? (y/n) " AN
+            if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+                hg qnew ${applied_patch} --git --currentuser;
+            fi
         fi
     fi
 }
@@ -510,6 +600,13 @@ mq_pop() { #-- Pops the current patch off the working branch and into out patch 
     else
         echo "no patches applied"
     fi
+}
+
+mq_rebase() { #-- Rebase your patch to sit above the current branch tip.
+    check_hg_repo
+    # First check if there are uncommitted changes and warn user
+    check_uncommitted_changes
+    rebase_patch --rebase
 }
 
 mq_status() { #-- Show any patches currently applied to your working branch and show changed files in the working directory.
