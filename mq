@@ -31,7 +31,7 @@
 ##
 ######################
 
-VERSION=1.0.4
+VERSION=1.0.5
 
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
@@ -256,7 +256,8 @@ mq_apply() { #-- Apply a patch to your working branch.
     else # no patches currently applied
         project=$(working_project)
         if [[ ${2} && "${2}" != "--list" ]]; then
-            selected_patch=${2};
+            name=${2};
+            selected_patch=$(printf "${PATCH_NAMING}" "${name}")_${project};
             if [[ -f "${PATCH_DIR}/${selected_patch}" ]]; then
                 echo "Setting current patch to ${selected_patch} in working branch...";
             else
