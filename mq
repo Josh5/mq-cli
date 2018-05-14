@@ -31,11 +31,23 @@
 ##
 ######################
 
-VERSION=1.0.5
+VERSION=1.0.6
 
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
-    return $?;
+    result=$?
+    if [[ $result -ne 0 ]]; then
+        fuzzy_match_string=$(cat "${BASH_SOURCE[0]}" | grep "mq_${1}")
+        fuzzy_match_string=${fuzzy_match_string%()*}
+        fuzzy_match_string=${fuzzy_match_string#mq_}
+        if [[ -z "${fuzzy_match_string// }" ]]; then
+            return 1;
+        else
+            echo mq_${fuzzy_match_string}
+        fi
+    else
+        echo mq_${1}
+    fi
 }
 
 function working_project {
@@ -658,11 +670,21 @@ else
         main_usage;
         exit 1;
     fi
+    if [ ${1} == 'help' ] ; then
+        main_usage;
+        exit 0;
+    fi
 
-    command_exists ${1} && mq_${1} $@ || main_usage
+    cmd=$(command_exists ${1})
+    if [[ ! ${cmd} ]]; then
+        echo "Oops... You entered an unknown command - ${1}"
+        echo 
+        main_usage;
+    else
+        ${cmd} $@
+    fi
 
     exit 0
-
 
     if [[ -s ${PATCH_DIR}/${APPLIED_PATCH} ]]; then
         echo "yes"
