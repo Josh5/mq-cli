@@ -33,6 +33,16 @@
 
 VERSION=1.0.6
 
+
+CHEAD="\e[93m";
+CPATCH="\e[92m";
+CLBLUE="\e[94m";
+CLMAG="\e[95m";
+CMODIFIED="\e[1;94m"; # Light Blue (bold)
+CUNTRACKED="\e[1;4;95m"; # Light Mag (bold underlined)
+CNORM="\e[0m";
+
+
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
     result=$?
@@ -627,27 +637,70 @@ mq_status() { #-- Show any patches currently applied to your working branch and 
     hg_branch=$(hg id -b);
     hq_qseries=$(hg qseries);
     hg_status=$(hg status);
-    echo -n "
-    Current branch:     ${hg_branch}
-    Applied patch:      ${hq_qseries}
+    # Get diff stats
+    selected_patch=${hq_qseries[0]};
+    patch_path=./.hg/patches/${selected_patch};
+    current_patch_stats="";
+    if [[ -f ${patch_path} ]]; then
+        COUNT=0;
+        DELETED=0;
+        INSERTED=0;
+        MODIFIED=0;
+        MQ_FILES_CHANGED="";
+        while read -r line; do
+            [[ $line =~ 'INSERTED' ]] && continue;
+            (( COUNT += 1 ))
+            (( DELETED += $( echo $line | awk -F',' '{print $2}' ) ))
+            (( INSERTED += $( echo $line | awk -F',' '{print $1}' ) ))
+            (( MODIFIED += $( echo $line | awk -F',' '{print $3}' ) ))
+            MQ_FILES_CHANGED="${MQ_FILES_CHANGED}
+    M $( echo $line | awk -F',' '{print $4}' )"
+        done <<< "$(hg qdiff | diffstat -t)"
+        current_patch_stats="
+                        Total added lines:    ${INSERTED}
+                        Total deleted lines:  ${DELETED}
+                        Modified files:       ${COUNT}
+        "
+        current_patch_stats="";
+        while read -r line; do
+            current_patch_stats="${current_patch_stats}
+                        ${line}"
+        done <<< "$(hg qdiff | diffstat)"
+    fi
+    HG_FILES_CHANGED="";
+    while read -r line; do
+        #line="\e[1;4m${line}"
+        [[ "$line" == "M"* ]] && line="${CMODIFIED}${line}";
+        [[ "$line" == "?"* ]] && line="${CUNTRACKED}${line}";
+        HG_FILES_CHANGED="${HG_FILES_CHANGED}
+    ${line}${CNORM}"
+    done <<< $(hg status ${@:2})
+    # Print:
+    echo -ne "
+${CHEAD}Current branch:${CNORM}         ${hg_branch}
+${CHEAD}Applied patch:${CNORM}          ${CPATCH}${hq_qseries}${CNORM}
+${current_patch_stats}
 
+
+${CHEAD}MQ Status (modifications currently saved to patch file):${CNORM}
+${MQ_FILES_CHANGED}
+
+
+${CHEAD}HG Status (modifications not saved to patch file):${CNORM}
 
     The codes used to show the status of files are:
 
-      M = modified
-      A = added
-      R = removed
-      C = clean
-      ! = missing (deleted by non-hg command, but still tracked)
-      ? = not tracked
-      I = ignored
-        = origin of the previous file (with --copies)
+                M = modified
+                A = added
+                R = removed
+                C = clean
+                ! = missing (deleted by non-hg command, but still tracked)
+                ? = not tracked
+                I = ignored
+                  = origin of the previous file (with --copies)
 
-
-Status:
+${HG_FILES_CHANGED}
     "
-    echo
-    hg status ${@:2}
     echo
 }
 
