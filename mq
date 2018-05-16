@@ -31,7 +31,7 @@
 ##
 ######################
 
-VERSION=1.0.6
+VERSION=1.0.7
 
 
 CHEAD="\e[93m";
@@ -702,8 +702,17 @@ ${HG_STATUS}
 }
 
 mq_version() { #-- Output version and copyright information.
-    echo -n $VERSION
-    echo 
+    echo -ne "${CHEAD}Version:${CNORM}    $VERSION";
+    echo
+    echo -ne "${CHEAD}License:${CNORM}";
+    while read -r line; do
+        [[ "$line" == *"/bin/bash"* ]] && continue;
+        [[ "$line" == *"########"* ]] && continue;
+        #[[ "$line" == "#" ]] && continue;
+        line=$(echo "$line" | sed -r 's/[#]+/ /g');
+        echo "    $line";
+    done <<< $(head -n 21 "${BASH_SOURCE[0]}");
+
 }
 
 ### Env setup ----------------------------------------------------
