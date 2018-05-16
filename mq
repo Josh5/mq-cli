@@ -31,22 +31,52 @@
 ##
 ######################
 
-VERSION=1.0.7
+VERSION=1.0.8
 
 
-CHEAD="\e[93m";
-CPATCH="\e[92m";
-CLBLUE="\e[94m";
-CLMAG="\e[95m";
-CLRED="\e[91m";
-CLGREEN="\e[92m";
-CMODIFIED="\e[1;94m"; # M Light Blue (bold)
-CUNTRACKED="\e[1;4;95m"; # ? Light Mag (bold underlined)
-CMISSING="\e[1;4;36m"; # ! Cyan (bold underlined)
-CREMOVED="\e[1;91m"; # R Light Red (bold)
-CADDED="\e[1;92m"; # A Light Green (bold)
-CNORM="\e[0m";
 
+
+function __mq_get_commands_list {
+    re='(?<=mq_)([a-z]+)(?=\()';
+    commands=$(cat ${BASH_SOURCE[0]} | grep -o -P ${re});
+    echo ${commands};
+}
+
+function __mq_bash_auto_complete {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts=$(__mq_get_commands_list)
+
+    if [[ ${cur} == [a-z]* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) );
+        return 0;
+    fi
+
+    if [[ ${prev} && ${prev} != "mq" ]] ; then
+        # Complete file paths for these options
+        if [ ${prev} == "import" ] || [ ${prev} == "export" ] ; then
+            # Unescape space
+            cur=${cur//\\ / }
+            # Expand tilder to $HOME
+            [[ ${cur} == "~/"* ]] && cur=${cur/\~/$HOME}
+            # Show completion if path exist (and escape spaces)
+            compopt -o filenames
+            local files=("${cur}"*)
+            [[ -e ${files[0]} ]] && COMPREPLY=( "${files[@]// /\ }" )
+            return 0
+        fi
+        # For now we don't need to support options
+        return 0;
+    fi
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) );
+}
+if [[ $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ) == "/etc/bash_completion.d" ]]; then
+    # Read this file as bash auto completion
+    complete -F __mq_bash_auto_complete mq;
+    return 0;
+fi
 
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
@@ -73,47 +103,10 @@ function working_project {
     echo ${remote}
 }
 
-function get_commands_list {
-    re='(?<=mq_)([a-z]+)(?=\()';
-    commands=$(cat ${BASH_SOURCE[0]} | grep -o -P ${re});
-    echo ${commands};
-}
-
 function read_command_help {
     re='(?<=#--)(.*?)$';
     message=$(cat ${BASH_SOURCE[0]} | grep "mq_${1}()" | grep -o -P ${re});
     echo ${message};
-}
-
-function mq_bash_auto_complete {
-    local cur prev opts
-    COMPREPLY=()
-    cur="${COMP_WORDS[COMP_CWORD]}"
-    prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts=$(get_commands_list)
-
-    if [[ ${cur} == [a-z]* ]] ; then
-        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) );
-        return 0;
-    fi
-
-    if [[ ${prev} && ${prev} != "mq" ]] ; then
-        # Complete file paths for these options
-        if [ ${prev} == "import" ] || [ ${prev} == "export" ] ; then
-            # Unescape space
-            cur=${cur//\\ / }
-            # Expand tilder to $HOME
-            [[ ${cur} == "~/"* ]] && cur=${cur/\~/$HOME}
-            # Show completion if path exist (and escape spaces)
-            compopt -o filenames
-            local files=("${cur}"*)
-            [[ -e ${files[0]} ]] && COMPREPLY=( "${files[@]// /\ }" )
-            return 0
-        fi
-        # For now we don't need to support options
-        return 0;
-    fi
-    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) );
 }
 
 function indent {
@@ -126,7 +119,7 @@ function main_usage {
     list of commands:
     "
     echo 
-    for command in $(get_commands_list)
+    for command in $(__mq_get_commands_list)
     do
         help_message=$(read_command_help ${command});
         ((spaces = 15 - ${#command}));
@@ -265,6 +258,19 @@ PATCH_NAMING=${PATCH_NAMING:-%s}
 PATCH_DIR=$(eval echo $(hg config mq.patch_dir));
 PATCH_DIR=${PATCH_DIR:-${MQ_HOME}/patches}
 EXPORT_DIR=$(eval echo $(hg config mq.export_dir));
+
+CHEAD="\e[93m";
+CPATCH="\e[92m";
+CLBLUE="\e[94m";
+CLMAG="\e[95m";
+CLRED="\e[91m";
+CLGREEN="\e[92m";
+CMODIFIED="\e[1;94m"; # M Light Blue (bold)
+CUNTRACKED="\e[1;4;95m"; # ? Light Mag (bold underlined)
+CMISSING="\e[1;4;36m"; # ! Cyan (bold underlined)
+CREMOVED="\e[1;91m"; # R Light Red (bold)
+CADDED="\e[1;92m"; # A Light Green (bold)
+CNORM="\e[0m";
 #
 ##
 ######################
