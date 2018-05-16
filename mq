@@ -38,6 +38,8 @@ CHEAD="\e[93m";
 CPATCH="\e[92m";
 CLBLUE="\e[94m";
 CLMAG="\e[95m";
+CLRED="\e[91m";
+CLGREEN="\e[92m";
 CMODIFIED="\e[1;94m"; # M Light Blue (bold)
 CUNTRACKED="\e[1;4;95m"; # ? Light Mag (bold underlined)
 CMISSING="\e[1;4;36m"; # ! Cyan (bold underlined)
@@ -553,6 +555,35 @@ mq_import() { #-- Import a patch into this project.
     fi
 }
 
+mq_list() { #-- Show a list of patches in the patch cache pool.
+    check_hg_repo
+    project=$(working_project)
+    # List all patches
+    echo -ne "
+    list of available patches:
+    (a patch with a '${CLGREEN}*${CNORM}' denotes the currently applied patch)
+    "
+    echo 
+    applied_patch=$(hg qseries);
+    applied_patch=${applied_patch[0]};
+    for file in ${PATCH_DIR}/*
+    do
+        if [[ -f $file ]]; then
+            patch_name=${file##*/};
+            patch_project=${file##*_};
+            if [[ "${patch_project}" != "${project}" ]]; then # Ignore all patches not named for this project
+                continue;
+            fi
+            applied=' ';
+            if [[ "${applied_patch}" == "${patch_name}" ]]; then
+                applied="${CLGREEN}*"
+            fi
+            echo -e "     ${applied} ${patch_name}${CNORM}";
+        fi
+    done
+    echo
+}
+
 mq_new() { #-- Generate new patch for current working branch.
     check_hg_repo
     if [[ -s ./.hg/patches/series ]]; then 
@@ -573,35 +604,6 @@ mq_new() { #-- Generate new patch for current working branch.
     project=$(working_project)
     name=$(printf "${PATCH_NAMING}" "${2}")_${project};
     hg qnew ${name} ${@:3} --git --currentuser;
-}
-
-mq_patches() { #-- Show a list of patches in the patch cache pool.
-    check_hg_repo
-    project=$(working_project)
-    # List all patches
-    echo -n "
-    list of available patches:
-    (a patch with a '*' denotes the currently applied patch)
-    "
-    echo 
-    for file in ${PATCH_DIR}/*
-    do
-        if [[ -f $file ]]; then
-            patch_name=${file##*/};
-            patch_project=${file##*_};
-            if [[ "${patch_project}" != "${project}" ]]; then # Ignore all patches not named for this project
-                continue;
-            fi
-            applied=' ';
-            applied_patch=$(hg qseries);
-            applied_patch=${applied_patch[0]};
-            if [[ "${applied_patch}" == "${patch_name}" ]]; then
-                applied='*'
-            fi
-            echo "     ${applied} ${patch_name}";
-        fi
-    done
-    echo
 }
 
 mq_pop() { #-- Pops the current patch off the working branch and into out patch cache pool.
