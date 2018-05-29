@@ -317,7 +317,7 @@ mq_apply() { #-- Apply a patch to your working branch.
             done
             if [[ ${conf_array} ]]; then # Only show if list not empty
                 echo
-                read -p "Select a patch fromt he list above: " menu
+                read -p "Select a patch from the list above: " menu
                 numbers='^[0-9]+$'
                 if [[ "${menu}" -le "${#conf_array[@]}" && ${menu} =~ ${numbers} && "${menu}" != "0" ]]; then
                     (( menu-- ))
