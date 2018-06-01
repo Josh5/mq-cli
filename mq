@@ -31,7 +31,7 @@
 ##
 ######################
 
-VERSION=1.0.8
+VERSION=1.0.9
 
 
 
@@ -78,6 +78,16 @@ if [[ $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ) == "/etc/bash_completion
     return 0;
 fi
 
+function command_extension_exists {
+    script_dir="$( readlink -f "${BASH_SOURCE[0]}")";
+    script_dir=${script_dir%/mq};
+    extensions_dir=${script_dir}/extensions
+    if [[ ! -f ${extensions_dir}/${1}.py ]]; then
+        return 1;
+    fi
+    echo ${extensions_dir}/${1}.py ${@:2};
+}
+
 function command_exists {
     cat "${BASH_SOURCE[0]}" | grep "mq_${1}()" > /dev/null;
     result=$?
@@ -86,12 +96,17 @@ function command_exists {
         fuzzy_match_string=${fuzzy_match_string%()*}
         fuzzy_match_string=${fuzzy_match_string#mq_}
         if [[ -z "${fuzzy_match_string// }" ]]; then
-            return 1;
+            cmd=$(command_extension_exists ${@});
+            if [[ ! ${cmd} ]]; then
+                return 1;
+            else
+                echo ${cmd};
+            fi
         else
-            echo mq_${fuzzy_match_string}
+            echo mq_${fuzzy_match_string} ${@};
         fi
     else
-        echo mq_${1}
+        echo mq_${1} ${@};
     fi
 }
 
@@ -348,6 +363,7 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
         do
             hg qdelete ${patch};
         done
+        rm -rf ./.hg/patches/*;
     fi
 }
 
@@ -466,7 +482,7 @@ mq_finish() { #-- Move applied patches into repository history.
             echo "    NOTE:"
             echo "    If you choose to pull and update, you will be given the option to review your patch again after this step."
             echo
-            read -p "Would you like to carried out an 'hg pull' and 'hg update' before finishing this patch? (y/n) " AN
+            read -p "Would you like to carry out an 'hg pull' and 'hg update' before finishing this patch? (y/n) " AN
             if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
                 pull=1;
                 if [[ ${rebase} == 0 ]]; then
@@ -516,9 +532,13 @@ mq_import() { #-- Import a patch into this project.
         fi
         if [[ "${arg}" == "-a" ]]; then
             apply=1;
-        else
-            src=$arg;
+            continue;
         fi
+        if [[ "${arg}" =~ "--name" ]]; then
+            name=$(echo ${arg} | awk -F'=' '{print $2}');
+            continue;
+        fi
+        src=$arg;
     done
     if [[ ! -f ${src} ]]; then 
         echo "Failed to import '${src}'";
@@ -527,13 +547,13 @@ mq_import() { #-- Import a patch into this project.
         exit 1
     fi
     # Import the patch
-    echo "Importing patch '${src}'...";
-    echo
-    read -p "Provide a name for this patch: " name
+    if [[ ! ${name} ]]; then
+        echo
+        read -p "Provide a name for this patch: " name
+    fi
     project=$(working_project);
     selected_patch=$(printf "${PATCH_NAMING}" "${name}")_${project};
-    # TODO: check if patch already exists
-    echo $selected_patch;
+    echo "Patch will be named '${selected_patch}'...";
     patch_path=${PATCH_DIR}/${selected_patch};
     if [[ -s ${patch_path} ]]; then  # patch with this name already exists...
         echo
@@ -740,13 +760,13 @@ else
         exit 0;
     fi
 
-    cmd=$(command_exists ${1})
+    cmd=$(command_exists ${@})
     if [[ ! ${cmd} ]]; then
         echo "Oops... You entered an unknown command - ${1}"
         echo 
         main_usage;
     else
-        ${cmd} $@
+        ${cmd}
     fi
 
     exit 0
