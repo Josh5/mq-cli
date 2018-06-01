@@ -145,7 +145,7 @@ class Mantis(object):
         ret = self.req.make_request(_url, 'get')
         self.log(ret.content)
         tree = html.fromstring(ret.content)
-        notes = tree.xpath('//*[contains(@class, "bugnote-note")]/a[text()]')
+        notes = tree.xpath('//*[contains(@class, "bugnote-note")]//a[text()]')
         issue_patches = {}
         for note in notes:
             text = note.xpath('text()')
