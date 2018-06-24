@@ -42,12 +42,24 @@ function __mq_get_commands_list {
     echo ${commands};
 }
 
+function __mq_get_extension_list {
+    extensions="";
+    script_dir="$( readlink -f "${BASH_SOURCE[0]}")";
+    script_dir=${script_dir%/mq};
+    extensions_dir=${script_dir}/extensions
+    for item in ${extensions_dir}/*.py; do 
+        item=$(basename $(echo $item | sed 's/\.py$//') ); 
+        extensions="${extensions} ${item}"
+    done
+    echo ${extensions};
+}
+
 function __mq_bash_auto_complete {
     local cur prev opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts=$(__mq_get_commands_list)
+    opts="$(__mq_get_commands_list) $(__mq_get_extension_list)";
 
     if [[ ${cur} == [a-z]* ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) );
@@ -124,22 +136,35 @@ function read_command_help {
     echo ${message};
 }
 
+function print_extension_help {
+    script_dir="$( readlink -f "${BASH_SOURCE[0]}")";
+    script_dir=${script_dir%/mq};
+    extensions_dir=${script_dir}/extensions
+    ${extensions_dir}/${1}.py help;
+}
+
 function indent {
     sed 's/^/    /'; 
 }
 
 function main_usage {
-    echo -n "mq [COMMAND] [OPTIONS]
+    echo -n "mq [COMMAND/EXTENSION] [OPTIONS]
 
     list of commands:
     "
     echo 
-    for command in $(__mq_get_commands_list)
-    do
+    for command in $(__mq_get_commands_list); do
         help_message=$(read_command_help ${command});
         ((spaces = 15 - ${#command}));
         white_space=$(printf %${spaces}s);
         echo "        ${command}" "${white_space}" "${help_message}";
+    done
+    echo -n "
+    list of extensions:
+    "
+    echo 
+    for command in $(__mq_get_extension_list); do
+        print_extension_help ${command};
     done
     echo
 }
@@ -149,6 +174,27 @@ function check_hg_repo {
     if [[ ! ${project} ]]; then
         echo "abort: no repository found in '${PWD}' (.hg not found)!"
         exit 1
+    fi
+}
+
+function wiggle_rejects {
+    WIGGLE=$(which wiggle)
+    if [[ ! -z ${WIGGLE} ]]; then
+        rej_file=${1:-$(tr -d '\0' </dev/stdin)};
+        orig_file=${rej_file%.rej}
+        echo "Found reject file ${rej_file} ${orig_file}";
+        ${WIGGLE} "${orig_file}" "${rej_file}" > "${orig_file}.wiggle"
+        if [[ -f "${orig_file}.wiggle" ]]; then
+            echo "Resolve unresolved conflicts in mergetool..."
+            meld "${orig_file}" "${orig_file}.wiggle"
+        fi
+        rm -f "${orig_file}.wiggle"
+        mv "${rej_file}" "${rej_file}.merged"
+    else
+        echo "You need to install the wiggle tool."
+        echo "Try running 'sudo apt install wiggle'. Then run this command again"
+        echo 
+        exit 1;
     fi
 }
 
@@ -236,7 +282,7 @@ function rebase_patch {
             qparent=$(grep '# Parent ' ${applied_patch_path} | awk '{print $3}');
             tip=$(hg id -r tip -i);
             hg update -r ${qparent}
-            hg qpush ${applied_patch} 2> /dev/null;
+            hg qpush ${applied_patch};
             qtip=$(hg id -r qtip -i);
             hg rebase -s ${qtip} -d ${tip};
             hg qrefresh;
@@ -348,7 +394,7 @@ mq_apply() { #-- Apply a patch to your working branch.
         fi
         patch_path=${PATCH_DIR}/${selected_patch};
         hg qimport ${patch_path} 2> /dev/null;
-        hg qpush ${selected_patch} 2> /dev/null;
+        hg qpush ${selected_patch};
     fi
 }
 
@@ -367,9 +413,23 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
     fi
 }
 
-mq_commit() { #-- Commit the specified files or all outstanding changes.
-    check_hg_repo
-    hg qrefresh -eUD ${@:2};
+mq_commit() { #-- Commit the specified files or all outstanding changes. Use option '--refresh' or '-r' to prevent updating user information
+    check_hg_repo;
+    ARGS="";
+    ARG_EDIT="-e";
+    ARG_USER="-U";
+    ARG_DATE="-D";
+    for arg in ${@:2}; do
+        if [[ "${arg}" == "--refresh" || "${arg}" == "-r" ]]; then
+            ARG_EDIT="";
+            ARG_USER="";
+            ARG_DATE="";
+            continue;
+        fi
+        ARGS="${ARGS} ${arg}";
+    done
+    ARGS="${ARG_EDIT} ${ARG_USER} ${ARG_DATE} ${ARGS}"
+    hg qrefresh ${ARGS};
 }
 
 mq_diff() { #-- Diff repository (or selected files).
@@ -508,7 +568,7 @@ mq_finish() { #-- Move applied patches into repository history.
                 hg qpop -a -f 2> /dev/null;
                 hg pull
                 hg update
-                hg qpush ${applied_patch} 2> /dev/null;
+                hg qpush ${applied_patch};
             fi
             hg qrefresh
             echo
@@ -725,6 +785,13 @@ ${CHEAD}HG Status (modifications not saved to patch file):${CNORM}
 ${HG_STATUS}
     ";
     echo
+}
+
+mq_wiggle() { #-- Find and attempt to resolve failed hunks of an applied patch using wiggle.
+    check_hg_repo;
+    find . -type f -name "*.rej" -print0 | while IFS= read -r -d '' rej_file; do
+        wiggle_rejects "${rej_file}"
+    done
 }
 
 mq_version() { #-- Output version and copyright information.

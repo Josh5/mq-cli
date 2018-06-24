@@ -15,7 +15,10 @@ import ConfigParser
 from lxml import html
 from pprint import pprint
 
-
+try:
+    from packaging import version as version_parse
+except:
+    from pkg_resources import parse_version as version_parse
 
 
 
@@ -202,6 +205,52 @@ class Mantis(object):
         print("No patch imported.")
         return False
 
+    def upload(self, file, issue):
+        global req
+        issue_url = self.BASE_URL + '/view.php?id={}'.format(issue)
+        ret = req.make_request(issue_url, 'get', allow_redirects=True)
+        self.log(ret.headers)
+        self.log(ret.cookies)
+        tree = html.fromstring(ret.content)
+        bugnote_add_token = tree.xpath(
+            '//input[@name="bugnote_add_token"]/@value')
+        bug_id = tree.xpath('//input[@name="bug_id"]/@value')
+        bugnote_text = tree.xpath('//input[@name="bugnote_text"]/@value')
+        max_file_size = tree.xpath('//input[@name="max_file_size"]/@value')
+        #bugnote_add_token = ""
+        if os.path.exists(file):
+            self.log("uploading file " + file)
+            #files = {'ISSUE_12440_gocabinets.hg.patch': open(file, 'rb')}
+            #files = {"file": ("ISSUE_12440_gocabinets.hg.patch", open(filepath, "rb"))}
+            headers = {
+                "Accept": "application/json",
+                "Origin": "https://www.nsquared.co.nz",
+                "Host": "www.nsquared.co.nz",
+                "Referer": issue_url,
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.75 Safari/537.36",
+                "X-Requested-With": "XMLHttpRequest",
+            }
+            data = {
+                'bugnote_add_token': bugnote_add_token[0] if bugnote_add_token else "",
+                'bug_id': bug_id[0] if bug_id else "",
+                'bugnote_text': bugnote_text[0] if bugnote_text else "",
+                'max_file_size': max_file_size[0] if max_file_size else "",
+                'file-name': 'Filename',
+            }
+            files = {"file": ("ISSUE_12440_gocabinets", open(
+                file, "rb"), 'applicaiton-type')}
+            response = req.make_request(
+                issue_url, 'files', payload=data, files=files, headers=headers, allow_redirects=False)
+            self.log(response)
+            self.log(response.status_code)
+            self.log(response.cookies)
+            pprint(response.headers)
+            # response.raise_for_status()
+            # pprint(response.json())
+            # print response.content
+            # files = {'file': open('style.css')}
+            # response = requests.post(url, files=files)
+
 
 
 def get_params():
@@ -216,9 +265,24 @@ def get_params():
 
 
 
+def check_deps():
+    if version_parse(requests.__version__) < version_parse('2.18.4'):
+        print("This extensions requires requests version '2.18.4' or greater");
+        print("Your current version:");
+        print(requests.__version__);
+        return False;
+    return True;
+
+
 if __name__ == '__main__':
+    if not check_deps():
+        sys.exit(1);
     args = get_params()
     mantis = Mantis(debug=args.debugging)
+    if args.command == "help":
+        print("        mantis           Import or Export a patch into this project from Mantis.");
+        print("                         Usage:");
+        print("                                 mq mantis import [ISSUE NUMBER]");
     if args.command == "import":
         if not args.issue:
             sys.exit(1);
