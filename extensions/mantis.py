@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 #
 
 
@@ -11,20 +11,19 @@ import getpass
 import json
 import subprocess
 import argparse
-import ConfigParser
 from lxml import html
 from pprint import pprint
 
 try:
-    from packaging import version as version_parse
+    import ConfigParser as configparser
 except:
-    from pkg_resources import parse_version as version_parse
+    import configparser as configparser
 
 
 
 class Config():
     def __init__(self):
-        self.config = ConfigParser.RawConfigParser()
+        self.config = configparser.RawConfigParser()
 
     def read_config(self):
         self.config.read(os.path.join(os.path.expanduser("~"), ".hgrc"))
@@ -185,7 +184,7 @@ class Mantis(object):
         print("")
         for key in patch_list:
             print("      {}) {}".format(count, key))
-            selection_list[count] = patch_list[key]
+            selection_list[str(count)] = patch_list[key]
             count += 1
         print("")
         selection = input("Select a patch from the list above: ")
@@ -264,19 +263,7 @@ def get_params():
     return args
 
 
-
-def check_deps():
-    if version_parse(requests.__version__) < version_parse('2.18.4'):
-        print("This extensions requires requests version '2.18.4' or greater");
-        print("Your current version:");
-        print(requests.__version__);
-        return False;
-    return True;
-
-
 if __name__ == '__main__':
-    if not check_deps():
-        sys.exit(1);
     args = get_params()
     mantis = Mantis(debug=args.debugging)
     if args.command == "help":

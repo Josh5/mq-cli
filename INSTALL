@@ -24,16 +24,11 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 
 
-function check_root {
-    echo "##########################################"
-    echo "##     Checking for root permission     ##"
-    echo "##########################################"
-    if [ "$(id -u)" != "0" ]; then
-        echo "ERROR: This script must be run as root...."
-        echo
-        exit 1
-    fi
-    echo
+function install_python {
+    echo "###########################################"
+    echo "##     Updating python requirements      ##"
+    echo "###########################################"
+    sudo -H pip3 install -r ${DIR}/extensions/requirements.txt 
 }
 
 
@@ -42,10 +37,11 @@ function install_link {
     echo "##         Installing as Symlink         ##"
     echo "###########################################"
     chmod +x ${DIR}/mq
-    rm -f /usr/bin/mq
-    rm -f /etc/bash_completion.d/mq
-    ln -sv ${DIR}/mq /usr/bin/mq
-    ln -sv /usr/bin/mq /etc/bash_completion.d/mq
+    sudo rm -f /usr/bin/mq
+    sudo rm -f /etc/bash_completion.d/mq
+    sudo ln -sv ${DIR}/mq /usr/bin/mq
+    sudo ln -sv /usr/bin/mq /etc/bash_completion.d/mq
+    install_python
     echo
 }
 
@@ -55,29 +51,41 @@ function install_cp {
     echo "##           Installing Files           ##"
     echo "##########################################"
     chmod +x ${DIR}/mq
-    rm -f /usr/bin/mq
-    rm -f /etc/bash_completion.d/mq
-    cp -fv ${DIR}/mq /usr/bin/mq
-    ln -sv /usr/bin/mq /etc/bash_completion.d/mq
+    sudo rm -f /usr/bin/mq
+    sudo rm -f /etc/bash_completion.d/mq
+    sudo cp -fv ${DIR}/mq /usr/bin/mq
+    sudo ln -sv /usr/bin/mq /etc/bash_completion.d/mq
+    install_python
     echo
+}
+
+
+function update {
+    echo "##########################################"
+    echo "##        Pull in latest changes        ##"
+    echo "##########################################"
+    git pull origin master 
+    install_python
 }
 
 #####################
 ##     Execute     ##
 #####################
 
-check_root
 if [ "$1" == "link" ]; then
     install_link
 elif [ "$1" == "copy" ]; then
     install_cp
+elif [ "$1" == "update" ]; then
+    update
 else
     echo -n "Example INSTALL <TYPE>
 
     <TYPE> can be either:
 
-    	link 		Installs as symlinks to this dir
-    	copy 		Copies necessary files to destination
+        link        Installs as symlinks to this dir
+        copy        Copies necessary files to destination
+        update      Pulls the latest changes and updates your system
     "
     echo
 fi
