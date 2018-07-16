@@ -411,6 +411,16 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
         done
         rm -rf ./.hg/patches/*;
     fi
+    if [[ $(hg status -n | grep -e .orig -e .rej) ]]; then
+        echo "Found leftover uncontrolled files:"
+        echo  -ne "${CUNTRACKED}\n"
+        hg status -n | grep -e .orig -e .rej;
+        echo -ne "${CNORM}\n"
+        read -p "Would you like to also remove these? (y/n) " AN
+        if [[ "${AN}" == "Y" || "${AN}" == "y" ]]; then
+            rm -f $(hg status -n | grep -e .orig -e .rej);
+        fi
+    fi
 }
 
 mq_commit() { #-- Commit the specified files or all outstanding changes. Use option '--refresh' or '-r' to prevent updating user information
