@@ -35,7 +35,6 @@ VERSION=1.0.9
 
 
 
-
 function __mq_get_commands_list {
     re='(?<=mq_)([a-z]+)(?=\()';
     commands=$(cat ${BASH_SOURCE[0]} | grep -o -P ${re});
@@ -130,6 +129,16 @@ function working_project {
     echo ${remote}
 }
 
+function project_root {
+    root_dir=$(hg root);
+    echo ${root_dir};
+}
+
+function project_patch_dir {
+    patch_dir=$(project_root)/.hg/patches;
+    echo ${patch_dir};
+}
+
 function read_command_help {
     re='(?<=#--)(.*?)$';
     message=$(cat ${BASH_SOURCE[0]} | grep "mq_${1}()" | grep -o -P ${re});
@@ -220,7 +229,7 @@ function rebase_patch {
     if [[ $(hg qseries) ]]; then
         applied_patch=$(hg qseries);
         applied_patch=${applied_patch[0]};
-        applied_patch_path="./.hg/patches/${applied_patch}";
+        applied_patch_path="$(project_patch_dir)/${applied_patch}";
         pull=0;
         rebase=0;
         prompt=1;
@@ -409,7 +418,7 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
         do
             hg qdelete ${patch};
         done
-        rm -rf ./.hg/patches/*;
+        rm -rf $(project_patch_dir)/*;
     fi
     if [[ $(hg status -n | grep -e .orig -e .rej) ]]; then
         echo "Found leftover uncontrolled files:"
@@ -465,7 +474,7 @@ mq_export() { #-- Generate a local output of a patch to a specified directory.
     if [[ $(hg qseries) ]]; then
         applied_patch=$(hg qseries);
         selected_patch=${applied_patch[0]};
-        patch_path=./.hg/patches/${selected_patch};
+        patch_path=$(project_patch_dir)/${selected_patch};
         echo "selecting applied patch ${selected_patch} from your current project...";
         echo
         # First check if there are uncommitted changes and warn user
@@ -527,7 +536,7 @@ mq_finish() { #-- Move applied patches into repository history.
         hg_branch=$(hg id -b);
         applied_patch=$(hg qseries);
         applied_patch=${applied_patch[0]};
-        applied_patch_path="./.hg/patches/${applied_patch}";
+        applied_patch_path="$(project_patch_dir)/${applied_patch}";
         echo -n "Finishing patch
         Current branch:     ${hg_branch}
         Applied patch:      ${applied_patch}
@@ -682,11 +691,11 @@ mq_list() { #-- Show a list of patches in the patch cache pool.
 
 mq_new() { #-- Generate new patch for current working branch.
     check_hg_repo
-    if [[ -s ./.hg/patches/series ]]; then 
+    if [[ -s $(project_patch_dir)/series ]]; then 
         echo "abort: and active patch already exists"; 
         exit 1
     fi
-    if [[ -s ./.hg/patches/status ]]; then 
+    if [[ -s $(project_patch_dir)/status ]]; then 
         echo "abort: and active patch already exists"; 
         exit 1
     fi
@@ -710,8 +719,8 @@ mq_pop() { #-- Pops the current patch off the working branch and into out patch 
     if [[ $(hg qseries) ]]; then
         applied_patch=$(hg qseries);
         applied_patch=${applied_patch[0]};
-        applied_patch_path="./.hg/patches/${applied_patch}";
-        echo "Popping patch ${applied_patch}";
+        applied_patch_path="$(project_patch_dir)/${applied_patch}";
+        echo "Moving patch ${applied_patch_path} >> ${PATCH_DIR}/${applied_patch}";
         cp -f ${applied_patch_path} ${PATCH_DIR}/;
         status=$?;
         if [[ $status == 0 && -s ${PATCH_DIR}/${applied_patch} ]]; then # Ensure patch was copied correctly before removing from working tree
@@ -740,7 +749,7 @@ mq_status() { #-- Show any patches currently applied to your working branch and 
     hg_status=$(hg status);
     # Get diff stats
     selected_patch=${hq_qseries[0]};
-    patch_path=./.hg/patches/${selected_patch};
+    patch_path=$(project_patch_dir)/${selected_patch};
     current_patch_stats="";
     if [[ -f ${patch_path} ]]; then
         while read -r line; do
