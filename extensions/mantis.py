@@ -55,7 +55,7 @@ class REMOTE():
             except Exception:
                 pass
 
-    def make_request(self, url, method, payload=None, headers=None, allow_redirects=False, files=None):
+    def make_request(self, url, method, payload=None, headers=None, allow_redirects=True, files=None):
         """Make an http request. Return the response."""
         self.log('Request URL: %s' % url)
         self.log('Headers: %s' % headers)
@@ -276,4 +276,3 @@ if __name__ == '__main__':
         mantis.import_patch_from_mantis(args.issue)
     if args.command == "export":
         print("This feature does not yet exist")
-
