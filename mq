@@ -31,10 +31,10 @@
 ##
 ######################
 
-VERSION=1.0.10
+VERSION=1.0.11
 
 
-
+# bash complete functions
 function __mq_get_commands_list {
     re='(?<=mq_)([a-z]+)(?=\()';
     commands=$(cat ${BASH_SOURCE[0]} | grep -o -P ${re});
@@ -89,6 +89,62 @@ if [[ $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd ) == "/etc/bash_completion
     return 0;
 fi
 
+# install/update/uninstall functions:
+function install_python {
+    echo "###########################################";
+    echo "##     Updating python requirements      ##";
+    echo "###########################################";
+    DIR="$( cd "$( dirname "$( readlink -f "${BASH_SOURCE[0]}")" )" && pwd )";
+    sudo -H python3 -m pip install -r ${DIR}/extensions/requirements.txt;
+    echo
+}
+function uninstall_link {
+    echo "###########################################";
+    echo "##          Uninstalling mq-cli          ##";
+    echo "###########################################";
+    sudo rm -fv /usr/bin/mq;
+    sudo rm -fv /usr/local/bin/mq;
+    sudo rm -fv /etc/bash_completion.d/mq;
+    echo;
+}
+function install_link {
+    echo "###########################################";
+    echo "##           Installing mq-cli           ##";
+    echo "###########################################";
+    DIR="$( cd "$( dirname "$( readlink -f "${BASH_SOURCE[0]}")" )" && pwd )";
+    chmod +x ${DIR}/mq;
+    sudo rm -f /usr/local/bin/mq;
+    sudo rm -f /etc/bash_completion.d/mq;
+    sudo ln -sv ${DIR}/mq /usr/local/bin/mq;
+    sudo ln -sv /usr/local/bin/mq /etc/bash_completion.d/mq;
+    echo;
+    install_python;
+    echo;
+}
+function update {
+    echo "##########################################";
+    echo "##        Pull in latest changes        ##";
+    echo "##########################################";
+    DIR="$( cd "$( dirname "$( readlink -f "${BASH_SOURCE[0]}")" )" && pwd )";
+    CWD=$PWD;
+    cd ${DIR};
+    git pull origin master;
+    echo;
+    install_python;
+    cd ${CWD};
+    echo;
+}
+function install {
+    if [ "$1" == "--install" ]; then
+        install_link
+    elif [ "$1" == "--update" ]; then
+        update
+    elif [ "$1" == "--uninstall" ]; then
+        uninstall_link
+    fi
+}
+
+# mq-cli functions
 function command_extension_exists {
     script_dir="$( readlink -f "${BASH_SOURCE[0]}")";
     script_dir=${script_dir%/mq};
@@ -843,6 +899,10 @@ else
     fi
     if [ ${1} == 'help' ] ; then
         main_usage;
+        exit 0;
+    fi
+    if [[ ${1} == '--install' || ${1} == '--update' || ${1} == '--uninstall' ]]; then
+        install ${1};
         exit 0;
     fi
 
