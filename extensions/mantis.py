@@ -149,7 +149,7 @@ class Mantis(object):
             self.login();
         ret = self.req.make_request(_url, 'get', headers=self.headers);
         self.log(ret.content)
-        tree = html.fromstring(ret.content)
+        tree = html.fromstring(ret.text)
         notes = tree.xpath('//*[contains(@class, "bugnote-note")]//a[text()]');
         issue_patches = {};
         for note in notes:
@@ -162,6 +162,35 @@ class Mantis(object):
                     link = link[0];
                 issue_patches[text] = link;
         return issue_patches;
+
+    def fetch_on_mantis_bug(self, issue=""):
+        while not issue:
+            issue = input('Enter an issue number: ');
+        _url = self.BASE_URL + "/view.php?id={}".format(issue);
+        if not self.COOKIE:
+            self.login();
+        ret = self.req.make_request(_url, 'get', headers=self.headers);
+        self.log(ret.content);
+        tree = html.fromstring(ret.text);
+        try:
+            summary = tree.xpath('//td[@class="bug-summary"]/text()')[0].lstrip("0");
+            print(summary);
+            print("");
+        except:
+            self.log("Failed to fetch mantis issue summary");
+        try:
+            description = tree.xpath('//td[@class="bug-description"]/p/text()')[0].lstrip("0");
+            print(description);
+            print("");
+        except:
+            self.log("Failed to fetch mantis issue description");
+
+    def open_mantis_bug_in_browser(self, issue=""):
+        import webbrowser
+        while not issue:
+            issue = input('Enter an issue number: ');
+        _url = self.BASE_URL + "/view.php?id={}".format(issue);
+        webbrowser.open(_url, new=0, autoraise=True)
 
     def download_file(self, url, filename):
         _file   = os.path.join('/', 'tmp', filename);
@@ -270,12 +299,25 @@ if __name__ == '__main__':
     args = get_params()
     mantis = Mantis(debug=args.debugging)
     if args.command == "help":
-        print("        mantis           Import or Export a patch into this project from Mantis.");
+        print("        mantis           Expand mq-cli tool to integrate with Mantis.");
+        print("                         Sub-Commands:");
+        print("                                 import [ISSUE NUMBER]           Import a patch from mantis to your mq patch cache pool");
+        print("                                 info [ISSUE NUMBER]             Show details of your mantis issue");
+        print("                                 open [ISSUE NUMBER]             Open the mantis issue in your default web browser");
         print("                         Usage:");
         print("                                 mq mantis import [ISSUE NUMBER]");
+        print("                                 mq mantis info [ISSUE NUMBER]");
     if args.command == "import":
         if not args.issue:
             sys.exit(1);
         mantis.import_patch_from_mantis(args.issue)
+    if args.command == "info":
+        if not args.issue:
+            sys.exit(1);
+        mantis.fetch_on_mantis_bug(args.issue)
+    if args.command == "open":
+        if not args.issue:
+            sys.exit(1);
+        mantis.open_mantis_bug_in_browser(args.issue)
     if args.command == "export":
         print("This feature does not yet exist")
