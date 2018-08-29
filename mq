@@ -404,7 +404,7 @@ CNORM="\e[0m";
 
 mq_add() { #-- Add the specified files or folders on the next commit (alias for hg add).
     check_hg_repo;
-    hg add ${@};
+    hg add ${@:2};
 }
 
 mq_apply() { #-- Apply a patch to your working branch.
