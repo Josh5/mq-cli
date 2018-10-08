@@ -32,7 +32,7 @@
 ##
 ######################
 
-VERSION=1.0.12
+VERSION=1.0.13
 
 
 # bash complete functions
@@ -377,6 +377,22 @@ function rebase_patch {
             fi
         fi
     fi
+}
+
+function strip_to_patch_and_squash {
+    commit_id=${1};
+    patch_name=${2};
+    hg qrename ${patch_name} working;
+    hg qpop -a;
+    mkdir -p $(project_patch_dir)/_stripped;
+    stripped_commit=$(project_patch_dir)/_stripped/${commit_id};
+    hg export -o ${stripped_commit} -r ${commit_id}
+    hg qimport ${stripped_commit};
+    hg strip ${commit_id};
+    hg qnew ${patch_name} --git --currentuser;
+    hg qfold ${commit_id};
+    hg qfold working;
+    hg qrefresh;
 }
 
 ######################
@@ -761,11 +777,11 @@ mq_list() { #-- Show a list of patches in the patch cache pool.
 mq_new() { #-- Generate new patch for current working branch.
     check_hg_repo
     if [[ -s $(project_patch_dir)/series ]]; then 
-        echo "abort: and active patch already exists"; 
+        echo "abort: an active patch already exists"; 
         exit 1
     fi
     if [[ -s $(project_patch_dir)/status ]]; then 
-        echo "abort: and active patch already exists"; 
+        echo "abort: an active patch already exists"; 
         exit 1
     fi
     if [[ ! ${2} ]]; then
@@ -809,6 +825,96 @@ mq_rebase() { #-- Rebase your patch to sit above the current branch tip.
     # First check if there are uncommitted changes and warn user
     check_uncommitted_changes
     rebase_patch --rebase
+}
+
+mq_squash() { #-- Squash one or more revisions from the working branch into a single patch file.
+    check_hg_repo;
+    if [[ $(hg qseries) ]]; then
+        # First check if current try has uncommitted changes (cannot apply without committing changes first)
+        applied_patch=$(hg qseries);
+        applied_patch=${applied_patch[0]};
+        applied_patch_path="$(project_patch_dir)/${applied_patch}";
+        patch_name=${applied_patch};
+    else
+        if [[ ! ${2} ]]; then
+            echo "abort: no current patch applied and no new patch name specified";
+            echo
+            echo "Usage: mq squash [NAME]";
+            echo
+            exit 1
+        fi
+    fi
+    if [[ ${2} ]]; then
+        if [[ ! $(hg qseries) ]]; then
+            check_uncommitted_changes required;
+            project=$(working_project)
+            patch_name=$(printf "${PATCH_NAMING}" "${2}")_${project};
+            hg qnew ${patch_name} --git --currentuser;
+        fi
+    fi
+    check_uncommitted_changes required;
+    current_qtip=$(hg log -r qtip --template "{node}\n");
+    revision_string="tip:0";
+    if [[ ! -z ${current_qtip} ]]; then
+        revision_string="${revision_string}-${current_qtip}"
+    fi
+    branch_changes=$(hg log -r ${revision_string} --template "{node}\n" --only-branch $(hg branch));
+    selection="";
+    end_selection="";
+    for commit in ${branch_changes}; do
+        echo
+        hg log -r ${commit};
+        while true; do
+            read -p "Strip this commit into the current patch? (y/n/c) " AN;
+            case "${AN}" in
+                [yY] | [yY][Ee][Ss] )
+                    echo "Selecting commit ${commit}";
+                    selection="${selection} ${commit}";
+                    break;
+                    ;;
+                [nN] | [n|N][O|o] )
+                    echo "Ignoring commit ${commit}";
+                    end_selection="true";
+                    break;
+                    ;;
+                *) echo "That was not a valid selection.";
+                   ;;
+            esac
+        done
+        if [[ ! -z ${end_selection} ]]; then
+            break;
+        fi
+    done
+    echo 
+    echo 
+    echo "==================================================================================================="
+    echo "                                             SELECTED:                                             "
+    echo "==================================================================================================="
+    echo 
+    for commit in ${selection}; do
+        hg log -r ${commit} --style compact;
+    done
+    echo 
+    echo "==================================================================================================="
+    echo 
+    echo "The commits listed above are selected for squashing to a single patch file.."
+    while true; do
+        read -p "Do you wish to proceed? (y/n) " AN;
+        case "${AN}" in
+            [yY] | [yY][Ee][Ss] )
+                break;
+                ;;
+            [nN] | [n|N][O|o] )
+                echo "Canceling";
+                exit 0
+                ;;
+            *) echo "That was not a valid selection.";
+               ;;
+        esac
+    done
+    for commit in ${selection}; do
+        strip_to_patch_and_squash ${commit} ${patch_name};
+    done
 }
 
 mq_status() { #-- Show any patches currently applied to your working branch and show changed files in the working directory.
@@ -879,11 +985,11 @@ mq_undo() { #-- Pull the last commit back into your patch queue. This will undo 
     check_hg_repo;
     # TODO: If a patch already exists, check if we want to squash it
     if [[ -s $(project_patch_dir)/series ]]; then 
-        echo "abort: and active patch already exists"; 
+        echo "abort: an active patch already exists"; 
         exit 1
     fi
     if [[ -s $(project_patch_dir)/status ]]; then 
-        echo "abort: and active patch already exists"; 
+        echo "abort: an active patch already exists"; 
         exit 1
     fi
     if [[ ! ${2} ]]; then
@@ -897,6 +1003,10 @@ mq_undo() { #-- Pull the last commit back into your patch queue. This will undo 
     name=$(printf "${PATCH_NAMING}" "${2}")_${project};
     mutable_changes=$(hg log -r "reverse(secret())" -r "reverse(draft())" --template "{node}\n" -l 1);
     selection="";
+    if [[ -z ${mutable_changes} ]]; then
+        echo "abort: no mutable found"; 
+        exit 1
+    fi
     for commit in ${mutable_changes}; do
         echo
         hg log -r ${commit};
@@ -909,7 +1019,7 @@ mq_undo() { #-- Pull the last commit back into your patch queue. This will undo 
             [nN] | [n|N][O|o] )
                 echo "Ignoring commit ${commit}"
                 ;;
-            *) echo "That was not a valit selection."
+            *) echo "That was not a valid selection."
                ;;
         esac
     done
