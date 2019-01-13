@@ -32,7 +32,7 @@
 ##
 ######################
 
-VERSION=1.0.13
+VERSION=1.0.14
 
 
 # bash complete functions
@@ -443,7 +443,14 @@ mq_apply() { #-- Apply a patch to your working branch.
         exit 1
     else # no patches currently applied
         project=$(working_project)
-        if [[ ${2} && "${2}" != "--list" ]]; then
+        LIST_ARGS=''
+        for arg in ${@:2}; do
+            if [[ "-t -r -rt -tr" == *"${arg}"* ]]; then
+                LIST_ARGS="${LIST_ARGS} ${arg}";
+                continue;
+            fi
+        done
+        if [[ ${2} && -z ${LIST_ARGS} ]]; then
             name=${2};
             selected_patch=$(printf "${PATCH_NAMING}" "${name}")_${project};
             if [[ -f "${PATCH_DIR}/${selected_patch}" ]]; then
@@ -456,11 +463,11 @@ mq_apply() { #-- Apply a patch to your working branch.
             echo
             i=1
             k=0
-            for file in ${PATCH_DIR}/*
-            do
-                if [[ -f $file ]]; then
-                    patch_name=${file##*/};
-                    patch_project=${file##*_};
+            for file in $(ls ${LIST_ARGS} ${PATCH_DIR}); do
+                file_path=${PATCH_DIR}/${file};
+                if [[ -f $file_path ]]; then
+                    patch_name=${file_path##*/};
+                    patch_project=${file_path##*_};
                     if [[ "${patch_project}" != "${project}" ]]; then # Ignore all patches not named for this project
                         continue;
                     fi
@@ -504,6 +511,9 @@ mq_clear() { #-- Wipe the current patch from your working branch. Warning! All n
             hg qdelete ${patch};
         done
         rm -rf $(project_patch_dir)/*;
+    else
+        echo; echo "You did not type 'YES'. No changes were made.";
+        exit 0;
     fi
     if [[ $(hg status -n | grep -e .orig -e .rej) ]]; then
         echo "Found leftover uncontrolled files:"
@@ -748,6 +758,12 @@ mq_import() { #-- Import a patch into this project.
 mq_list() { #-- Show a list of patches in the patch cache pool.
     check_hg_repo
     project=$(working_project)
+    for arg in ${@:2}; do
+        if [[ "-t -r -rt -tr" == *"${arg}"* ]]; then
+            LIST_ARGS="${LIST_ARGS} ${arg}";
+            continue;
+        fi
+    done
     # List all patches
     echo -ne "
     list of available patches:
@@ -756,11 +772,11 @@ mq_list() { #-- Show a list of patches in the patch cache pool.
     echo 
     applied_patch=$(hg qseries);
     applied_patch=${applied_patch[0]};
-    for file in ${PATCH_DIR}/*
-    do
-        if [[ -f $file ]]; then
-            patch_name=${file##*/};
-            patch_project=${file##*_};
+    for file in $(ls ${LIST_ARGS} ${PATCH_DIR}); do
+        file_path=${PATCH_DIR}/${file};
+        if [[ -f $file_path ]]; then
+            patch_name=${file_path##*/};
+            patch_project=${file_path##*_};
             if [[ "${patch_project}" != "${project}" ]]; then # Ignore all patches not named for this project
                 continue;
             fi
